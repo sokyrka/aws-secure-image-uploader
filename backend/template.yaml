@@ -10,30 +10,25 @@ Globals:
 
 Resources:
 
-  ApiGateway:
-    Type: AWS::Serverless::Api
-    Properties:
-      Name: image-upload-api
-      StageName: Prod
-      Cors:
-        AllowMethods: "'GET,POST,DELETE'"
-        AllowHeaders: "'Authorization,Content-Type'"
-        AllowOrigin: "'*'"
-
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "saas-upload-ui-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub "saas-upload-frontend-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
       WebsiteConfiguration:
         IndexDocument: index.html
         ErrorDocument: index.html
-      AccessControl: PublicRead
 
   FrontendBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref FrontendBucket
       PolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal: "*"
@@ -68,6 +63,21 @@ Resources:
       RestApiId: !Ref ApiGateway
       ProviderARNs:
         - !GetAtt UserPool.Arn
+
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: image-upload-api
+      StageName: Prod
+      Cors:
+        AllowMethods: "'GET,POST,DELETE'"
+        AllowHeaders: "'Authorization,Content-Type'"
+        AllowOrigin: "'*'"
+      Auth:
+        DefaultAuthorizer: CognitoAuth
+        Authorizers:
+          CognitoAuth:
+            UserPoolArn: !GetAtt UserPool.Arn
 
   UploadUrlFunction:
     Type: AWS::Serverless::Function

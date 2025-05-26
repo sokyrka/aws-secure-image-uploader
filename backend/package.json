@@ -6,7 +6,6 @@
   "scripts": {
     "prebuild": "rm -rf dist",
     "build": "esbuild index.ts --bundle --minify --sourcemap --platform=node --target=es2020 --outfile=dist/index.js",
-    "postbuild": "rm -rf lambda-package && mkdir lambda-package && cp dist/index.js lambda-package/ && cp package*.json lambda-package/ && cp -R node_modules lambda-package/ && cd lambda-package && zip -r ../aws-secure-image-uploader.zip . && cd .. && rm -rf lambda-package",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
