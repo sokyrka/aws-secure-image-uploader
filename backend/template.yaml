@@ -1,0 +1,176 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Full SaaS-style Image Upload App with UI, Cognito, API Gateway and S3
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Timeout: 10
+    MemorySize: 128
+
+Resources:
+
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: image-upload-api
+      StageName: Prod
+      Cors:
+        AllowMethods: "'GET,POST,DELETE'"
+        AllowHeaders: "'Authorization,Content-Type'"
+        AllowOrigin: "'*'"
+
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "saas-upload-ui-${AWS::AccountId}-${AWS::Region}"
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      AccessControl: PublicRead
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: "s3:GetObject"
+            Resource: !Sub "${FrontendBucket.Arn}/*"
+
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "image-upload-bucket-${AWS::AccountId}-${AWS::Region}"
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: image-user-pool
+      AutoVerifiedAttributes:
+        - email
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: image-app-client
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+
+  CognitoAuth:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: CognitoUserAuthorizer
+      Type: COGNITO_USER_POOLS
+      IdentitySource: method.request.header.Authorization
+      RestApiId: !Ref ApiGateway
+      ProviderARNs:
+        - !GetAtt UserPool.Arn
+
+  UploadUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: image-upload-url
+      Handler: dist/index.imageUploadUrl
+      CodeUri: .
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref UploadBucket
+      Events:
+        GetSignedUrl:
+          Type: Api
+          Properties:
+            Path: /upload-url
+            Method: get
+            Auth:
+              Authorizer: CognitoAuth
+            RestApiId: !Ref ApiGateway
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref UploadBucket
+
+  ListFilesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: list-user-files
+      Handler: dist/index.listUserFiles
+      CodeUri: .
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref UploadBucket
+      Events:
+        ListFiles:
+          Type: Api
+          Properties:
+            Path: /files
+            Method: get
+            Auth:
+              Authorizer: CognitoAuth
+            RestApiId: !Ref ApiGateway
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref UploadBucket
+
+  DownloadUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: get-download-url
+      Handler: dist/index.getDownloadUrl
+      CodeUri: .
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref UploadBucket
+      Events:
+        GetDownloadUrl:
+          Type: Api
+          Properties:
+            Path: /file/{key}
+            Method: get
+            Auth:
+              Authorizer: CognitoAuth
+            RestApiId: !Ref ApiGateway
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref UploadBucket
+
+  DeleteFileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: delete-file
+      Handler: dist/index.deleteFile
+      CodeUri: .
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref UploadBucket
+      Events:
+        DeleteFile:
+          Type: Api
+          Properties:
+            Path: /file/{key}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuth
+            RestApiId: !Ref ApiGateway
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref UploadBucket
+
+Outputs:
+  FrontendWebsiteUrl:
+    Description: "Frontend Static Website URL"
+    Value: !Sub "http://${FrontendBucket}.s3-website-${AWS::Region}.amazonaws.com"
+
+  ApiBaseUrl:
+    Description: API Gateway base URL
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+
+  BucketName:
+    Value: !Ref UploadBucket
+
+  CognitoUserPoolId:
+    Value: !Ref UserPool
+
+  CognitoAppClientId:
+    Value: !Ref UserPoolClient
