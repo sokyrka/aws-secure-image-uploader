@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "prebuild": "rm -rf dist",
-    "build": "esbuild index.ts --bundle --minify --sourcemap --platform=node --target=es2020 --outfile=dist/index.js",
+    "build": "esbuild index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --format=cjs",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
