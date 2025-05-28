@@ -10,35 +10,32 @@ Globals:
 
 Resources:
 
-  FrontendBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "saas-upload-frontend-${AWS::AccountId}-${AWS::Region}"
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
-        BlockPublicPolicy: false
-        IgnorePublicAcls: false
-        RestrictPublicBuckets: false
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: index.html
-
-  FrontendBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref FrontendBucket
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: "*"
-            Action: "s3:GetObject"
-            Resource: !Sub "${FrontendBucket.Arn}/*"
-
   UploadBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "image-upload-bucket-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+            MaxAge: 3000
 
   UserPool:
     Type: AWS::Cognito::UserPool
@@ -53,6 +50,9 @@ Resources:
       ClientName: image-app-client
       UserPoolId: !Ref UserPool
       GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
 
   CognitoAuth:
     Type: AWS::ApiGateway::Authorizer
@@ -68,9 +68,11 @@ Resources:
     Type: AWS::Serverless::Api
     Properties:
       Name: image-upload-api
+      EndpointConfiguration:
+        Type: REGIONAL
       StageName: Prod
       Cors:
-        AllowMethods: "'GET,POST,DELETE'"
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Authorization,Content-Type'"
         AllowOrigin: "'*'"
       Auth:
@@ -97,6 +99,14 @@ Resources:
             Auth:
               Authorizer: CognitoAuth
             RestApiId: !Ref ApiGateway
+        PreflightUploadUrl:
+          Type: Api
+          Properties:
+            Path: /upload-url
+            Method: options
+            Auth:
+              Authorizer: NONE
+            RestApiId: !Ref ApiGateway
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref UploadBucket
@@ -119,6 +129,14 @@ Resources:
             Auth:
               Authorizer: CognitoAuth
             RestApiId: !Ref ApiGateway
+        PreflightListFiles:
+          Type: Api
+          Properties:
+            Path: /files
+            Method: options
+            Auth:
+              Authorizer: NONE
+            RestApiId: !Ref ApiGateway
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref UploadBucket
@@ -136,10 +154,18 @@ Resources:
         GetDownloadUrl:
           Type: Api
           Properties:
-            Path: /file/{key}
+            Path: download/file
             Method: get
             Auth:
               Authorizer: CognitoAuth
+            RestApiId: !Ref ApiGateway
+        PreflightDownloadUrl:
+          Type: Api
+          Properties:
+            Path: download/file
+            Method: options
+            Auth:
+              Authorizer: NONE
             RestApiId: !Ref ApiGateway
       Policies:
         - S3ReadPolicy:
@@ -158,10 +184,18 @@ Resources:
         DeleteFile:
           Type: Api
           Properties:
-            Path: /file/{key}
+            Path: delete/file
             Method: delete
             Auth:
               Authorizer: CognitoAuth
+            RestApiId: !Ref ApiGateway
+        PreflightDeleteFile:
+          Type: Api
+          Properties:
+            Path: delete/file
+            Method: options
+            Auth:
+              Authorizer: NONE
             RestApiId: !Ref ApiGateway
       Policies:
         - S3CrudPolicy:

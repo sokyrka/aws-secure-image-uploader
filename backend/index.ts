@@ -7,8 +7,11 @@ const URL_EXPIRATION_SECONDS = 60;
 
 export const imageUploadUrl = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     try {
-        const claims = event.requestContext.authorizer?.claims;
-        const userId = claims?.sub;
+        if (event.httpMethod === 'OPTIONS') {
+            return buildCorsResponse(200, 'OK');
+        }
+
+        const userId = event.requestContext.accountId;
         const filename = event.queryStringParameters?.filename;
 
         if (!userId || !filename) {
@@ -29,6 +32,7 @@ export const imageUploadUrl = async (event: APIGatewayProxyEvent): Promise<APIGa
 
         return {
             statusCode: 200,
+            headers: CORS_HEADERS,
             body: JSON.stringify({ uploadUrl: signedUrl, key }),
         };
     } catch (error) {
@@ -46,9 +50,12 @@ export const imageUploadUrl = async (event: APIGatewayProxyEvent): Promise<APIGa
 
 export const getDownloadUrl = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     try {
-        const claims = event.requestContext.authorizer?.claims;
-        const userId = claims?.sub;
-        const key = decodeURIComponent(event.pathParameters?.key || '');
+        if (event.httpMethod === 'OPTIONS') {
+            return buildCorsResponse(200, 'OK');
+        }
+
+        const userId = event.requestContext.accountId;
+        const key = decodeURIComponent(event.queryStringParameters?.key || '');
 
         if (!userId || !key.startsWith(`uploads/${userId}/`)) {
             return {
@@ -65,6 +72,7 @@ export const getDownloadUrl = async (event: APIGatewayProxyEvent): Promise<APIGa
 
         return {
             statusCode: 200,
+            headers: CORS_HEADERS,
             body: JSON.stringify({ downloadUrl: signedUrl }),
         };
     } catch (error) {
@@ -78,8 +86,11 @@ export const getDownloadUrl = async (event: APIGatewayProxyEvent): Promise<APIGa
 
 export const listUserFiles = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     try {
-        const claims = event.requestContext.authorizer?.claims;
-        const userId = claims?.sub;
+        if (event.httpMethod === 'OPTIONS') {
+            return buildCorsResponse(200, 'OK');
+        }
+
+        const userId = event.requestContext.accountId;
 
         if (!userId) {
             return {
@@ -96,9 +107,10 @@ export const listUserFiles = async (event: APIGatewayProxyEvent): Promise<APIGat
             .promise();
 
         const files = result.Contents?.map((obj) => obj.Key) || [];
-
+        console.log("Files: " + files);
         return {
             statusCode: 200,
+            headers: CORS_HEADERS,
             body: JSON.stringify({ files }),
         };
     } catch (error) {
@@ -112,9 +124,12 @@ export const listUserFiles = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 export const deleteFile = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     try {
-        const claims = event.requestContext.authorizer?.claims;
-        const userId = claims?.sub;
-        const key = decodeURIComponent(event.pathParameters?.key || '');
+        if (event.httpMethod === 'OPTIONS') {
+            return buildCorsResponse(200, 'OK');
+        }
+
+        const userId = event.requestContext.accountId;
+        const key = decodeURIComponent(event.queryStringParameters?.key || '');
 
         if (!userId || !key.startsWith(`uploads/${userId}/`)) {
             return {
@@ -127,6 +142,7 @@ export const deleteFile = async (event: APIGatewayProxyEvent): Promise<APIGatewa
 
         return {
             statusCode: 200,
+            headers: CORS_HEADERS,
             body: JSON.stringify({ message: 'File deleted successfully' }),
         };
     } catch (error) {
@@ -137,3 +153,15 @@ export const deleteFile = async (event: APIGatewayProxyEvent): Promise<APIGatewa
         };
     }
 };
+
+export const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Authorization,Content-Type',
+    'Access-Control-Allow-Methods': 'GET,OPTIONS,POST,DELETE',
+};
+
+export const buildCorsResponse = (statusCode: number, body: any = '') => ({
+    statusCode,
+    headers: CORS_HEADERS,
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+});
